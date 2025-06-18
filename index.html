@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tifa - Assistente Vocale</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #response {
+      margin-top: 20px;
+      white-space: pre-line;
+    }
+    button {
+      background-color: #1f1f1f;
+      color: white;
+      border: 1px solid white;
+      padding: 10px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #333;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tifa - Assistente Vocale</h1>
+  <button onclick="startListening()">🎙️ Parla</button>
+  <div id="response"></div>
+
+  <script>
+    const synth = window.speechSynthesis;
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'it-IT';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'it-IT';
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      const voices = synth.getVoices().filter(v => v.lang.startsWith('it') && v.name.toLowerCase().includes("femmin"));
+      if (voices.length > 0) utterance.voice = voices[0];
+      synth.speak(utterance);
+    }
+
+    function startListening() {
+      recognition.start();
+    }
+
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById('response').innerText = "Hai detto: " + transcript;
+      const res = await fetch("https://TIFA-BACKEND-URL/chat", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ message: transcript })
+      });
+      const data = await res.json();
+      document.getElementById('response').innerText += "\n\nTifa: " + data.reply;
+      speak(data.reply);
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Errore riconoscimento:", event.error);
+    };
+  </script>
+</body>
+</html>
