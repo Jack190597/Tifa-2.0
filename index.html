@@ -1,76 +1,97 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Tifa - Assistente Vocale</title>
-  <style>
-    body {
-      background-color: #121212;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 20px;
-    }
-    #response {
-      margin-top: 20px;
-      white-space: pre-line;
-    }
-    button {
-      background-color: #1f1f1f;
-      color: white;
-      border: 1px solid white;
-      padding: 10px 20px;
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #333;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tifa - Assistente vocale IA</title>
 </head>
 <body>
-  <h1>Tifa - Assistente Vocale</h1>
-  <button onclick="startListening()">🎙️ Parla</button>
-  <div id="response"></div>
+<h1>Tifa - Assistente vocale IA</h1>
+<button id="start-btn">Inizia a parlare</button>
+<p id="status">Premi il pulsante e parla con Tifa...</p>
+<p id="response"></p>
 
-  <script>
-    const synth = window.speechSynthesis;
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = 'it-IT';
-    recognition.interimResults = false;
-    recognition.continuous = false;
+<script>
+const startBtn = document.getElementById('start-btn');
+const status = document.getElementById('status');
+const responseEl = document.getElementById('response');
 
-    function speak(text) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'it-IT';
-      utterance.pitch = 1;
-      utterance.rate = 1;
-      const voices = synth.getVoices().filter(v => v.lang.startsWith('it') && v.name.toLowerCase().includes("femmin"));
-      if (voices.length > 0) utterance.voice = voices[0];
-      synth.speak(utterance);
-    }
+let recognizing = false;
+let recognition = null;
 
-    function startListening() {
-      recognition.start();
-    }
+if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+  alert("Il tuo browser non supporta il riconoscimento vocale.");
+} else {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
 
-    recognition.onresult = async (event) => {
-      const transcript = event.results[0][0].transcript;
-      document.getElementById('response').innerText = "Hai detto: " + transcript;
-      const res = await fetch("https://TIFA-BACKEND-URL/chat", {
+  recognition.lang = 'it-IT';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  recognition.onstart = () => {
+    recognizing = true;
+    status.textContent = "Sto ascoltando...";
+    startBtn.disabled = true;
+  };
+
+  recognition.onend = () => {
+    recognizing = false;
+    status.textContent = "Elaboro la tua richiesta...";
+    startBtn.disabled = false;
+  };
+
+  recognition.onerror = (event) => {
+    recognizing = false;
+    status.textContent = "Errore nel riconoscimento vocale: " + event.error;
+    startBtn.disabled = false;
+  };
+
+  recognition.onresult = async (event) => {
+    const transcript = event.results[0][0].transcript.trim();
+    status.textContent = `Hai detto: "${transcript}"`;
+
+    try {
+      const res = await fetch("https://tifa-backend.onrender.com/chat", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ message: transcript })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: transcript }),
       });
-      const data = await res.json();
-      document.getElementById('response').innerText += "\n\nTifa: " + data.reply;
-      speak(data.reply);
-    };
 
-    recognition.onerror = (event) => {
-      console.error("Errore riconoscimento:", event.error);
-    };
-  </script>
+      const data = await res.json();
+      responseEl.textContent = "Tifa dice: " + data.reply;
+
+      // Sintesi vocale
+      const utterance = new SpeechSynthesisUtterance(data.reply);
+      utterance.lang = 'it-IT';
+
+      // Voce femminile - scegli la prima disponibile
+      const voices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('it'));
+      if (voices.length > 0) utterance.voice = voices[0];
+
+      window.speechSynthesis.speak(utterance);
+      utterance.onstart = () => {
+        if (recognition) recognition.abort(); // Ferma microfono mentre Tifa parla
+      };
+      utterance.onend = () => {
+        // Qui puoi decidere se riattivare il microfono automaticamente oppure no
+      };
+
+    } catch (error) {
+      responseEl.textContent = "Errore di comunicazione con il server.";
+    }
+  };
+}
+
+startBtn.addEventListener('click', () => {
+  if (recognizing) {
+    recognition.stop();
+    recognizing = false;
+    status.textContent = "Interrotto.";
+  } else {
+    recognition.start();
+  }
+});
+</script>
 </body>
 </html>
